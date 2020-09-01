@@ -2,6 +2,7 @@ ARG UBI_IMAGE=registry.access.redhat.com/ubi7/ubi-minimal:latest
 ARG GO_IMAGE=rancher/build-base:v1.14.2
 ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:v0.3.3-160-g7df7218c-amd64
+ARG TAG
 
 FROM ${UBI_IMAGE} as ubi
 
@@ -55,6 +56,7 @@ RUN cd /go/pod2daemon                  && \
     CGO_ENABLED=1 go build -v -o bin/flexvol-amd64 flexvol/flexvoldriver.go
 
 FROM calico/bpftool:v5.3-amd64 as bpftool
+FROM calico/node:${TAG} as calico-node
 FROM ${BIRD_IMAGE} as bird
 
 # Use this build stage to build runit.
@@ -101,7 +103,7 @@ COPY --from=builder /go/node/filesystem/ /
 # This has to come after copying over filesystem/, since that may overwrite /sbin depending on the base image.
 RUN ln -s /usr/sbin/modprobe /sbin/modprobe
 
-RUN mkdir -p /opt/cni
+RUN mkdir -p /opt/cni /usr/lib/calico
 ENV PATH=$PATH:/opt/cni/bin
 
 COPY --from=builder /go/calicoctl/bin/calicoctl /calicoctl
@@ -114,6 +116,7 @@ COPY --from=builder /go/cni-plugin/bin/amd64 /opt/cni/bin
 
 COPY --from=builder /go/node/dist/bin /bin
 COPY --from=bpftool /bpftool /bin
+COPY --from=calico-node /usr/lib/calico /usr/lib/calico
 
 COPY --from=builder /go/pod2daemon/flexvol/docker/flexvol.sh /usr/local/bin
 COPY --from=builder /go/pod2daemon/bin/flexvol-amd64 /usr/local/bin/flexvol
